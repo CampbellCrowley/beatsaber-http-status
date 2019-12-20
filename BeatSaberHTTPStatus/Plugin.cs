@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using IllusionPlugin;
+using IPA.Loader; 
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using BS_Utils.Gameplay;
@@ -17,7 +17,7 @@ using BS_Utils.Gameplay;
 // protected ScoreController._baseScore
 
 namespace BeatSaberHTTPStatus {
-	public class Plugin : IPlugin {
+	public class Plugin : IPA.IBeatSaberPlugin, IPA.IDisablablePlugin {
 		private bool initialized;
 
 		private StatusManager statusManager = new StatusManager();
@@ -26,7 +26,7 @@ namespace BeatSaberHTTPStatus {
 		private bool headInObstacle = false;
 
 		private GameplayCoreSceneSetupData gameplayCoreSceneSetupData;
-		private GamePauseManager gamePauseManager;
+		private PauseController pauseController;
 		private ScoreController scoreController;
 		private MonoBehaviour gameplayManager;
 		private GameplayModifiersModelSO gameplayModifiersSO;
@@ -61,9 +61,11 @@ namespace BeatSaberHTTPStatus {
 			Console.WriteLine("[HTTP Status " + PluginVersion + "] " + str);
 		}
 
-		public void OnApplicationStart() {
+		public void OnEnable() {
 			if (initialized) return;
 			initialized = true;
+
+			PluginLog("HTTP STATUS ENABLED");
 
 			SceneManager.activeSceneChanged += this.OnActiveSceneChanged;
 
@@ -71,12 +73,15 @@ namespace BeatSaberHTTPStatus {
 			server.InitServer();
 		}
 
+		public void OnDisable() { }
+
+		public void OnApplicationStart() { }
 		public void OnApplicationQuit() {
 			SceneManager.activeSceneChanged -= this.OnActiveSceneChanged;
 
-			if (gamePauseManager != null) {
-				RemoveSubscriber(gamePauseManager, "_gameDidPauseSignal", OnGamePause);
-				RemoveSubscriber(gamePauseManager, "_gameDidResumeSignal", OnGameResume);
+			if (pauseController != null) {
+				RemoveSubscriber(pauseController, "didPauseEvent", OnGamePause);
+				RemoveSubscriber(pauseController, "didResumeEvent", OnGameResume);
 			}
 
 			if (scoreController != null) {
@@ -99,7 +104,7 @@ namespace BeatSaberHTTPStatus {
 			server.StopServer();
 		}
 
-		private void OnActiveSceneChanged(Scene oldScene, Scene newScene) {
+		public void OnActiveSceneChanged(Scene oldScene, Scene newScene) {
 			GameStatus gameStatus = statusManager.gameStatus;
 
 			gameStatus.scene = newScene.name;
@@ -123,7 +128,7 @@ namespace BeatSaberHTTPStatus {
 				// In game
 				gameStatus.scene = "Song";
 
-				gamePauseManager = FindFirstOrDefault<GamePauseManager>();
+				pauseController = FindFirstOrDefault<PauseController>();
 				scoreController = FindFirstOrDefault<ScoreController>();
 				gameplayManager = Resources.FindObjectsOfTypeAll<StandardLevelGameplayManager>().FirstOrDefault() as MonoBehaviour ?? Resources.FindObjectsOfTypeAll<MissionLevelGameplayManager>().FirstOrDefault();
 				beatmapObjectCallbackController = FindFirstOrDefault<BeatmapObjectCallbackController>();
@@ -135,10 +140,10 @@ namespace BeatSaberHTTPStatus {
 				gameplayCoreSceneSetupData = BS_Utils.Plugin.LevelData.GameplayCoreSceneSetupData;
 
 				// Register event listeners
-				// private GameEvent GamePauseManager#_gameDidPauseSignal
-				AddSubscriber(gamePauseManager, "_gameDidPauseSignal", OnGamePause);
-				// private GameEvent GamePauseManager#_gameDidResumeSignal
-				AddSubscriber(gamePauseManager, "_gameDidResumeSignal", OnGameResume);
+				// private GameEvent PauseController#didPauseEvent
+				AddSubscriber(pauseController, "didPauseEvent", OnGamePause);
+				// private GameEvent PauseController#didResumeEvent
+				AddSubscriber(pauseController, "didResumeEvent", OnGameResume);
 				// public ScoreController#noteWasCutEvent<NoteData, NoteCutInfo, int multiplier> // called after AfterCutScoreBuffer is created
 				scoreController.noteWasCutEvent += OnNoteWasCut;
 				// public ScoreController#noteWasMissedEvent<NoteData, int multiplier>
@@ -242,7 +247,7 @@ namespace BeatSaberHTTPStatus {
 				gameStatus.staticLights = playerSettings.staticLights;
 				gameStatus.leftHanded = playerSettings.leftHanded;
 				gameStatus.playerHeight = playerSettings.playerHeight;
-				gameStatus.disableSFX = playerSettings.disableSFX;
+				// gameStatus.disableSFX = playerSettings.disableSFX;
 				gameStatus.reduceDebris = playerSettings.reduceDebris;
 				gameStatus.noHUD = playerSettings.noTextsAndHuds;
 				gameStatus.advancedHUD = playerSettings.advancedHud;
@@ -484,8 +489,8 @@ namespace BeatSaberHTTPStatus {
 			return (long) (DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).Ticks / TimeSpan.TicksPerMillisecond);
 		}
 
-		public void OnLevelWasLoaded(int level) {}
-		public void OnLevelWasInitialized(int level) {}
+		public void OnSceneLoaded(Scene scene, LoadSceneMode mode) { }
+		public void OnSceneUnloaded(Scene scene) { }
 		public void OnFixedUpdate() {}
 	}
 }
